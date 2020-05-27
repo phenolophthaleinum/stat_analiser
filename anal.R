@@ -1,30 +1,39 @@
 #!/usr/bin/env Rscript
 
-#install packages
-#install.packages(c("argparse", "dplyr", "Hmisc", "ggpubr"))
-library("argparse", quietly = TRUE)
-library("dplyr", quietly = TRUE)
-library("Hmisc", quietly = TRUE)
-library("ggpubr", quietly = TRUE)
-library("outliers", quietly = TRUE)
-library("stats", quietly = TRUE)
-library("car", quietly = TRUE)
-library("dunn.test", quietly = TRUE)
-library("FSA", quietly = TRUE)
-library("purrr", quietly = TRUE)
+options(warn = -1)
+
+cat("Checking libraries...\n")
+
+
+suppressPackageStartupMessages(install.packages(c("argparse", "dplyr", "Hmisc",
+                                    "ggpubr", "stats", "car", "dunn.test", "FSA",
+                                    "purrr", "reshape2", "stargazer"), repos = "http://cran.r-project.org"))
+suppressMessages(library("argparse", quietly = TRUE))
+suppressMessages(library("dplyr", quietly = TRUE))
+suppressMessages(library("Hmisc", quietly = TRUE))
+suppressMessages(library("ggpubr", quietly = TRUE))
+#suppressMessages(library("outliers", quietly = TRUE))
+suppressMessages(library("stats", quietly = TRUE))
+suppressMessages(library("car", quietly = TRUE))
+suppressMessages(library("dunn.test", quietly = TRUE))
+suppressMessages(library("FSA", quietly = TRUE))
+suppressMessages(library("purrr", quietly = TRUE))
+suppressMessages(library("reshape2", quietly = TRUE))
+suppressMessages(library("stargazer", quietly = TRUE))
+
 
 script_desc <- "Not much for now"
 
 #parse arguments for command
-#parse <- argparse::ArgumentParser(description = script_desc,
-#                                  formatter_class = 'argparse.RawTextHelpFormatter')
-#parse$add_argument('-o', dest = 'output_file', help = 
-#                     'Output file with report', required = FALSE)
-#parse$add_argument('-f', dest = 'file', help = 
-#                     'Source file with data', required = TRUE)
-#parse$add_argument('-s', dest = 'sep', help = 
-#                     'Data separator from csv file', required = TRUE)
-#args <- parse$parse_args()
+parser <- argparse::ArgumentParser(description = script_desc,
+                                  formatter_class = 'argparse.RawTextHelpFormatter')
+parser$add_argument('-o', dest = 'output_file', help = 
+                     'Output file with report', required = FALSE)
+parser$add_argument('-f', dest = 'file', help = 
+                     'Source file with data', required = TRUE)
+parser$add_argument('-s', dest = 'sep', help = 
+                     'Data separator from csv file', required = TRUE)
+args <- parser$parse_args()
 
 #FUNCTIONS=============================================
 #standard function to get mode value; thanks tutorialspoint!
@@ -52,7 +61,7 @@ imputing <- function(data, missing_val)
   return(data)
 }
 
-#full summary with median, mean, min, max, var, sd, shapiro_test, outliers
+#full summary with median, mean, min, max, var, sd, shapiro_test
 allDataSummary <- function(data)
 {
   group <- as.name(colnames(data)[1])
@@ -127,7 +136,7 @@ density_group_plot <- function(data)
         )
       }
     )
-    doPlot <- ggarrange(plotlist = applyToCol)
+    doPlot <- suppressMessages(ggarrange(plotlist = applyToCol))
     png(filename = paste(gr, 'density.png', sep = '_'), width = 3840, height = 2160, bg = "transparent")
     annotate_figure(doPlot, top = paste(gr, 'attributes desnsity'))
     print(doPlot)
@@ -167,31 +176,71 @@ createReport <- function(rData)
   #init
   sink(file = rData$args$output_file, append = TRUE)
     cat("=====Automatically generated report of analysis=====\n")
-    cat("Analysis time: ", paste(now()), "\n")
+    cat("Analysis time: ", paste(lubridate::now()), "\n")
     cat("=====================================================\n")
   sink()
   
   #report missing data
   sink(file = rData$args$output_file, append = TRUE)
     cat("===MISSING VALUES===\n")
-    cat("There is ", rData$missing_values, "record/s with NA value.\n")
+    cat("There are", rData$missingValues, "records with NA value.\n")
   sink()
   
   #report summary
   sink(file = rData$args$output_file, append = TRUE)
     cat("===SUMMARY===\n")
     cat("===For visualisation of outliers in every group check generated boxplots (groupname_boxplot.png)===")
-    cat(as.data.frame(rData$summary))
+    suppressMessages(melted <- melt(rData$summary, variable.name = "attribute"))
+    melted %>% format(scientific = FALSE, digits = 2) %>% stargazer::stargazer(type = "text", summary = FALSE, rownames = FALSE)
+    cat("\n")
   sink()
   
-  #report summary
+  #report outliers
+  sink(file = rData$args$output_file, append = TRUE)
+  cat("===OUTLIERS===\n")
+  cat("===For visualisation of outliers in every group check generated boxplots (groupname_boxplot.png)===")
+  cat(rData$outliersStr, sep = "\n")
+  sink()
+  
+  #report distribution
   sink(file = rData$args$output_file, append = TRUE)
     cat("===DISTRIBUTION===\n")
     cat("===For visualisation of distribution check generatred density plots (groupname_density.png)===")
-    cat(as.data.frame(rData$summary))
+    cat(rData$dataDistribution, sep = "\n")
   sink()
   
-  cat("Report saved to", rData$args$args$output_file, "\n")
+  #report analysis
+  sink(file = rData$args$output_file, append = TRUE)
+  cat("===STATISTICAL ANALYSIS===\n")
+  if(length(unique(rData$correctedData[[1]])) < 2)
+  {
+    sink(file = rData$args$output_file, append = TRUE)
+    cat('[WARNING] Loaded data contains only 1 group. Statistical comparsion is not possible - skipping.\n')
+    sink()
+  }else if(length(unique(rData$correctedData[[1]])) == 2)
+  {
+    sink(file = rData$args$output_file, append = TRUE)
+    cat(rData$analysisInterpretation, sep = "\n") 
+    sink()
+  }else
+  {
+    sink(file = rData$args$output_file, append = TRUE)
+    cat(rData$analysisInterpretation, sep = "\n")
+    sink()
+  }
+  sink(file = rData$args$output_file, append = TRUE)
+  cat(rData$nonNumericAnalysisInterpretation, sep = '\n')
+  cat("\n")
+  sink()
+  
+  #report correlation
+  sink(file = rData$args$output_file, append = TRUE)
+  cat("===CORRELATION ANALYSIS===\n")
+  cat(rData$correlationAnalysisInterpretation, sep = "\n")
+  cat("\n")
+  sink()
+  
+  cat("END OF REPORT=====================================================\n")
 }
 
 isEqualDistribution <- function(gr1, gr2, attribute, summaryData)
@@ -212,7 +261,15 @@ isEqualDistributionMany <- function(groups, attribute, summaryData)
     attribute_name <- paste(attribute, '_p_value', sep = '')
     logical <- append(logical, as.numeric(summaryData[gr_num, attribute_name]) > 0.05)
   }
+  #checks if there are only TRUE values in the list and returns T or F
   return(all(logical))
+}
+
+isEqualDistributionAttribute <- function(attr1, attr2, group, summaryData)
+{
+  gr_num <- which(summaryData[[1]] == group)
+  return(as.numeric(summaryData[gr_num, attr1]) > 0.05 &
+           as.numeric(summaryData[gr_num, attr2]) > 0.05)
 }
 
 analiseTwoGroups <- function(data, summaryData)
@@ -255,7 +312,7 @@ analiseTwoGroups <- function(data, summaryData)
       }
       results[[attribute]] <- c(test, 'Welch test')
     }
-    else(distribution_euqality & variance_equality)
+    else
     {
       test <- wilcox.test(data[[attribute]] ~ data[[1]])$p.value
       if(test < 0.05)
@@ -293,10 +350,10 @@ analiseMultipleGroups <- function(data, summaryData)
       if(test < 0.05)
       {
         cat("\t[ANOVA test]There are differences between groups\n")
-        cat("\tPost hoc test:\n")
-        cat("\t")
-        print(TukeyHSD(aov(data[[attribute]] ~ data[[1]])))
-        cat("\n")
+        cat("\t>Post hoc test:\n\t")
+        postTukey_text <- TukeyHSD(aov(data[[attribute]] ~ data[[1]]))[1] %>%
+        stargazer::stargazer(., type = "text", summary = FALSE)
+        #cat("\t",postTukey_text,"\n")
       }
       else
       {
@@ -310,10 +367,10 @@ analiseMultipleGroups <- function(data, summaryData)
       if(test < 0.05)
       {
         cat("\t[Kruskal test]There are differences between groups\n")
-        cat("\tPost hoc test:\n")
-        cat("\t")
-        print(dunnTest(as.numeric(data[[attribute]]), data[[1]]))
-        cat("\n")
+        cat("\t>Post hoc test:\n\t")
+        postDunn_text <- dunn.test(as.numeric(data[[attribute]]), data[[1]]) %>% as.data.frame %>%
+        stargazer::stargazer(., type = "text", summary = FALSE)
+        #cat("\t", postDunn_text,"\n")
       }
       else
       {
@@ -327,10 +384,10 @@ analiseMultipleGroups <- function(data, summaryData)
       if(test < 0.05)
       {
         cat("\t[Kruskal test]There are differences between groups\n")
-        cat("\tPost hoc test:\n")
-        cat("\t")
-        print(dunnTest(as.numeric(data[[attribute]]), data[[1]]))
-        cat("\n")
+        cat("\t>Post hoc test:\n\t")
+        postDunn_text <- dunn.test(as.numeric(data[[attribute]]), data[[1]]) %>% as.data.frame %>%
+        stargazer::stargazer(., type = "text", summary = FALSE)
+        #cat("\t", postDunn_text,"\n")
       }
       else
       {
@@ -374,18 +431,105 @@ analiseNonNumeric <- function(data)
   }
   return(result)
 }
+
+
+analiseCorrelation <- function(data, summaryData)
+{
+  attributes <- colnames(data %>% select_if(is.numeric))
+  groups <- unique(data[[1]])
+  #set to false returns list
+  attr_tuples <- combn(attributes, 2, simplify = FALSE)
+  grCol <- colnames(data)[[1]]
+  
+  for(group in groups)
+  {
+    gr_num <- which(data[[1]] == group)
+    selectedData <- data[gr_num,] %>% select_if(is.numeric)
+    cat("For group", group, '==============================\n')
+    #list of plots to put into single file
+    results <- list()
+    
+    for(attribute in attr_tuples)
+    {
+      pair_name <- sprintf('%s-%s', attribute[[1]], attribute[[2]])
+      attribute_name1 <- paste(attribute[[1]], '_p_value', sep = '')
+      attribute_name2 <- paste(attribute[[2]], '_p_value', sep = '')
+      distribution_equality <- isEqualDistributionAttribute(attribute_name1,
+                                                            attribute_name2, group, summaryData)
+      variance_equality <- leveneTest(data[[attribute[[1]]]] ~ data[[1]])$`Pr(>F)`[1] > 0.05 &
+        leveneTest(data[[attribute[[2]]]] ~ data[[1]])$`Pr(>F)`[1] > 0.05
+      if(variance_equality & distribution_equality)
+      {
+        test <- cor.test(selectedData[[attribute[[1]]]], selectedData[[attribute[[2]]]], method = "pearson")
+        if(test$p.value < 0.05)
+        {
+          cat("\t[Pearson test] Attribute", as.character(attribute[[1]]), "and", as.character(attribute[[2]]), "might be correlated with 
+              correlation value of", test$estimate, '\n')
+        }
+        else
+        {
+          cat("\t[Pearson test] Attribute", as.character(attribute[[1]]), "and", as.character(attribute[[2]]), "are probably NOT correlated\n")
+        }
+        plot <- ggscatter(selectedData,
+                          x = attribute[[1]],
+                          y = attribute[[2]],
+                          add = "reg.line",
+                          conf.int = TRUE,
+                          cor.coef = TRUE,
+                          cor.method = "prearson",
+                          color = "black",
+                          fill = "lightgray",
+                          palette = "green",
+                          ylab = attribute[[2]],
+                          xlab = attribute[[1]])
+        results[[pair_name]] <- plot 
+      }
+      else
+      {
+        test <- cor.test(selectedData[[attribute[[1]]]], selectedData[[attribute[[2]]]], method = "spearman")
+        if(test$p.value < 0.05)
+        {
+          cat("\t[Spearman test] Attribute", as.character(attribute[[1]]), "and", as.character(attribute[[2]]), "might be correlated with 
+              correlation value of", test$estimate, '\n')
+        }
+        else
+        {
+          cat("\t[Spearman test] Attribute", as.character(attribute[[1]]), "and", as.character(attribute[[2]]), "are probably NOT correlated\n")
+        }
+        plot <- ggscatter(selectedData,
+                          x = attribute[[1]],
+                          y = attribute[[2]],
+                          add = "reg.line",
+                          conf.int = TRUE,
+                          cor.coef = TRUE,
+                          cor.method = "spearman",
+                          color = "black",
+                          fill = "lightgray",
+                          palette = "green",
+                          ylab = attribute[[2]],
+                          xlab = attribute[[1]])
+        results[[pair_name]] <- plot
+      }
+    }
+    final_plot <- suppressMessages(ggarrange(plotlist = results))
+    png(filename = paste(group, 'correlation.png', sep = '_'), width = 3840, height = 2160, bg = "transparent")
+    print(final_plot)
+    dev.off()
+  }
+}
 #======================================================
 
 #initialize report
 dataReport <- list()
 
 #load csv
-#loadedData <- read.csv2(file = args$file, sep = args$sep)
-loadedData <- read.csv2(file = "przykladoweDaneZBrakami.csv", sep = ';')
+loadedData <- read.csv2(file = args$file, sep = args$sep)
+#loadedData <- read.csv2(file = "przykladoweDaneZBrakami.csv", sep = ';')
 
 #detect and impute missing values
+cat("===Missing values===\n")
 missing_values <- sum(!complete.cases(loadedData))
-cat("There is ", missing_values, "record/s with NA value.\n")
+cat("There are", missing_values, "records with NA value.\n")
 dataReport$missingValues <- missing_values
 
 loadedData <- imputing(loadedData, missing_values)
@@ -396,8 +540,8 @@ dataReport$correctedData <- loadedData
 #group <- colnames(loadedData)[1]
 dataReport$summary <- allDataSummary(data=loadedData)
 cat("===Numeric data summary===\n")
-print(as.data.frame(dataReport$summary))
-cat("======End of summary======\n")
+suppressMessages(melt(dataReport$summary, variable.name = "attribute", scientific = FALSE)) %>% format(., scientific = FALSE, digits = 2) %>%
+  as.data.frame(.) %>% stargazer::stargazer(., summary = FALSE, type = "text", rownames = FALSE)
 
 
 #outliers
@@ -417,15 +561,13 @@ returnDataDistribution(colnames(loadedData %>% select_if(is.numeric)), dataRepor
 dataReport$dataDistribution <- capture.output(
   returnDataDistribution(colnames(loadedData %>% select_if(is.numeric)), dataReport$summary))
 
-density_group_plot(loadedData)
+#plot density
+cat("===Plotting density===\n")
+invisible(density_group_plot(loadedData))
 
+#plot boxplots
+cat("===Plotting boxplots===\n")
 box_group_plot(loadedData)
-
-#if(!is.null(args$output_file))
-#{
-#  dataReport$args <- args
-#  createReport(dataReport)
-#}
 
 #numeric statistical analysis
 if(length(unique(loadedData[[1]])) < 2)
@@ -433,29 +575,34 @@ if(length(unique(loadedData[[1]])) < 2)
   warning('Loaded data contains only 1 group. Statistical comparsion is not possible - skipping.\n')
 }else if(length(unique(loadedData[[1]])) == 2)
 {
-  cat("Group pairwise analysis:\n")
+  cat("===Pairwise group analysis===\n")
   dataReport$analysis <- analiseTwoGroups(loadedData, dataReport$summary)
   dataReport$analysisInterpretation <- capture.output(analiseTwoGroups(loadedData, dataReport$summary)) 
 }else
 {
-  cat("Multiple group analysis:\n")
+  cat("===Multiple group analysis===\n")
   dataReport$analysis <- analiseMultipleGroups(loadedData, dataReport$summary)
   dataReport$analysisInterpretation <- capture.output(analiseMultipleGroups(loadedData, dataReport$summary))
 }
 #non-numeric analysis
+cat("===Non-numeric group analysis===\n")
 dataReport$nonNumericAnalysisInterpretation <- capture.output(analiseNonNumeric(loadedData))
 cat(dataReport$nonNumericAnalysisInterpretation, sep = '\n')
 
+#correlation analysis
+cat("===Correlation analysis===\nPlotting might take a while with significant amount of attributes.\n")
+dataReport$correlationAnalysisInterpretation <- capture.output(analiseCorrelation(loadedData, dataReport$summary))
+cat(dataReport$correlationAnalysisInterpretation, sep = "\n")
 
-#attributes <- names(unique(dataReport$summary %>% select_if(is.numeric)))
-#groups <- unique(dataReport$summary[[1]])
-#for(gr in groups)
-#{
-#  cat("GROUP:", gr)
-#  gr_num <- which(dataReport$summary[[1]] == gr)
-#  for(attr in attributes)
-#  {
-#    stargazer(as.data.frame(dataReport$summary[gr_num, attr]), summary = F, type = 'text')
-#  }
-#}
+#dataReport$args$output_file <- 'output_anal2.txt'
+#createReport(dataReport$args$output_file)
+#save report to output file
+if(!is.null(args$output_file))
+{
+  dataReport$args <- args
+  createReport(dataReport)
+  closeAllConnections()
+  #end this please
+  cat("[SUCCESS] Report saved to", dataReport$args$output_file, "\n")
+}
 
