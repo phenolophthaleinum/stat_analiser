@@ -5,9 +5,9 @@ options(warn = -1)
 cat("Checking libraries...\n")
 
 
-suppressPackageStartupMessages(install.packages(c("argparse", "dplyr", "Hmisc",
-                                    "ggpubr", "stats", "car", "dunn.test", "FSA",
-                                    "purrr", "reshape2", "stargazer"), repos = "http://cran.r-project.org"))
+#install.packages(c("argparse", "dplyr", "Hmisc",
+#                   "ggpubr", "stats", "car", "dunn.test", "FSA",
+#                   "purrr", "reshape2", "stargazer"), repos = "http://cran.r-project.org")
 suppressMessages(library("argparse", quietly = TRUE))
 suppressMessages(library("dplyr", quietly = TRUE))
 suppressMessages(library("Hmisc", quietly = TRUE))
@@ -83,7 +83,7 @@ returnOutliers <- function(out)
 {
   for(name in names(out))
   {
-    cat("In column", name, length(out[[name]]), "outliers with value of",  out[[name]], "\n")
+    cat("In column", name, length(out[[name]]), "outliers with value of",  paste(out[[name]], sep = ","), "\n")
   }
 }
 
@@ -189,7 +189,6 @@ createReport <- function(rData)
   #report summary
   sink(file = rData$args$output_file, append = TRUE)
     cat("===SUMMARY===\n")
-    cat("===For visualisation of outliers in every group check generated boxplots (groupname_boxplot.png)===")
     suppressMessages(melted <- melt(rData$summary, variable.name = "attribute"))
     melted %>% format(scientific = FALSE, digits = 2) %>% stargazer::stargazer(type = "text", summary = FALSE, rownames = FALSE)
     cat("\n")
@@ -198,14 +197,14 @@ createReport <- function(rData)
   #report outliers
   sink(file = rData$args$output_file, append = TRUE)
   cat("===OUTLIERS===\n")
-  cat("===For visualisation of outliers in every group check generated boxplots (groupname_boxplot.png)===")
+  cat("===For visualisation of outliers in every group check generated boxplots (groupname_boxplot.png)===\n")
   cat(rData$outliersStr, sep = "\n")
   sink()
   
   #report distribution
   sink(file = rData$args$output_file, append = TRUE)
     cat("===DISTRIBUTION===\n")
-    cat("===For visualisation of distribution check generatred density plots (groupname_density.png)===")
+    cat("===For visualisation of distribution check generatred density plots (groupname_density.png)===\n")
     cat(rData$dataDistribution, sep = "\n")
   sink()
   
@@ -433,6 +432,42 @@ analiseNonNumeric <- function(data)
 }
 
 
+typeOfCorrelation <- function(test_result)
+{
+  if(test_result > -1 & test_result < -0.7)
+  {
+    paste("are very strongly, negatively correlated")
+  }
+  else if(test_result >= -0.7 & test_result < -0.5)
+  {
+    paste("are strongly, negatively correlated")
+  }
+  else if(test_result >= -0.5 & test_result < -0.3)
+  {
+    paste("are moderately, negatively correlated")
+  }
+  else if(test_result >= -0.3 & test_result < -0.2)
+  {
+    paste("are weakly, negatively correlated")
+  }
+  else if(test_result >= 0.2 & test_result < 0.3)
+  {
+    paste("are weakly, positively correlated")
+  }
+  else if(test_result >= 0.3 & test_result < 0.5)
+  {
+    paste("are moderately, positively correlated")
+  }
+  else if(test_result >= 0.5 & test_result < 0.7)
+  {
+    paste("are strongly, positively correlated")
+  }
+  else if(test_result >= 0.7 & test_result < 1)
+  {
+    paste("are very strongly, positively correlated")
+  }
+}
+
 analiseCorrelation <- function(data, summaryData)
 {
   attributes <- colnames(data %>% select_if(is.numeric))
@@ -463,8 +498,8 @@ analiseCorrelation <- function(data, summaryData)
         test <- cor.test(selectedData[[attribute[[1]]]], selectedData[[attribute[[2]]]], method = "pearson")
         if(test$p.value < 0.05)
         {
-          cat("\t[Pearson test] Attribute", as.character(attribute[[1]]), "and", as.character(attribute[[2]]), "might be correlated with 
-              correlation value of", test$estimate, '\n')
+          cat("\t[Pearson test] Attribute", as.character(attribute[[1]]), "and", as.character(attribute[[2]]),
+          as.character(typeOfCorrelation(test$estimate)), "with correlation value of", test$estimate, '\n')
         }
         else
         {
@@ -489,8 +524,8 @@ analiseCorrelation <- function(data, summaryData)
         test <- cor.test(selectedData[[attribute[[1]]]], selectedData[[attribute[[2]]]], method = "spearman")
         if(test$p.value < 0.05)
         {
-          cat("\t[Spearman test] Attribute", as.character(attribute[[1]]), "and", as.character(attribute[[2]]), "might be correlated with 
-              correlation value of", test$estimate, '\n')
+          cat("\t[Spearman test] Attribute", as.character(attribute[[1]]), "and", as.character(attribute[[2]]),
+          as.character(typeOfCorrelation(test$estimate)), "with correlation value of", test$estimate, '\n')
         }
         else
         {
