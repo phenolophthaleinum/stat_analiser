@@ -47,6 +47,10 @@ getModeValue <- function(data_vector)
 #or by inserting mode if the value is not numeric
 imputing <- function(data, missing_val)
 {
+  if(missing_val)
+  {
+    cat("There are", as.numeric(missing_values), "records with NA value.\n")
+  }
   for(col in colnames(data))
   {
     if(is.numeric(data[[col]]))
@@ -564,7 +568,6 @@ loadedData <- read.csv2(file = args$file, sep = args$sep)
 #detect and impute missing values
 cat("===Missing values===\n")
 missing_values <- sum(!complete.cases(loadedData))
-cat("There are", missing_values, "records with NA value.\n")
 dataReport$missingValues <- missing_values
 
 loadedData <- imputing(loadedData, missing_values)
