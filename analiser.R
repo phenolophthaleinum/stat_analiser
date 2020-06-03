@@ -20,9 +20,10 @@ suppressMessages(library("FSA", quietly = TRUE))
 suppressMessages(library("purrr", quietly = TRUE))
 suppressMessages(library("reshape2", quietly = TRUE))
 suppressMessages(library("stargazer", quietly = TRUE))
+suppressMessages(library("gdata", quietly = TRUE))
 
 
-script_desc <- "Not much for now"
+script_desc <- "Statistical analiser by Maciej Michalczyk"
 
 #parse arguments for command
 parser <- argparse::ArgumentParser(description = script_desc,
@@ -40,7 +41,7 @@ args <- parser$parse_args()
 getModeValue <- function(data_vector)
 {
   unique_values <- unique(data_vector)
-  unique_values[which.max(tabulate(match(data_vector, unique_values)))]
+  return(unique_values[which.max(tabulate(match(data_vector, unique_values)))])
 }
 
 #imputes values by inserting mean if the value is numeric
@@ -154,12 +155,13 @@ box_group_plot <- function(data)
   graphics.off()
   
   group <- as.name(colnames(data)[1])
-  groupedData <- group_by(data, !!group)
+  groupedData <- data %>% group_by(!!group)
   gr_char <- as.character(unique(groupedData[[1]]))
+  namesCol <- colnames(data %>% select_if(is.numeric))
   for(gr in gr_char)
   {
     group_num <- which(groupedData[[1]] == gr)
-    selectedData <- as.data.frame(select_if(groupedData[group_num,], is.numeric))
+    selectedData <- as.data.frame(groupedData[group_num,namesCol])
     png(filename = paste(gr, 'boxplot.png', sep = '_'), width = 1980, height = 1080)
     for(col in ncol(selectedData))
     {
@@ -406,6 +408,8 @@ analiseNonNumeric <- function(data)
 {
   selectedData <- as.data.frame(data) %>% select_if(negate(is.numeric))
   cols <- colnames(selectedData)[-1]
+  print(names(cols))
+  print(typeof(cols))
   result <- list()
   
   cat("For attribute:\n")
@@ -562,17 +566,19 @@ analiseCorrelation <- function(data, summaryData)
 dataReport <- list()
 
 #load csv
-loadedData <- read.csv2(file = args$file, sep = args$sep)
-#loadedData <- read.csv2(file = "przykladoweDaneZBrakami.csv", sep = ';')
+loadedData <- read.csv2(file = args$file, sep = args$sep) %>% as.data.frame %>% mutate_all(na_if,"")
 
 #detect and impute missing values
 cat("===Missing values===\n")
-missing_values <- sum(!complete.cases(loadedData))
+missing_values <- sum(is.na(loadedData))
 dataReport$missingValues <- missing_values
 
 loadedData <- imputing(loadedData, missing_values)
 cat("Data corrected with average and mode values.\n")
 dataReport$correctedData <- loadedData
+
+#remove redundant levels
+loadedData <- droplevels(loadedData)
 
 #print report
 #group <- colnames(loadedData)[1]
@@ -601,7 +607,7 @@ dataReport$dataDistribution <- capture.output(
 
 #plot density
 cat("===Plotting density===\n")
-invisible(density_group_plot(loadedData))
+density_group_plot(loadedData)
 
 #plot boxplots
 cat("===Plotting boxplots===\n")
@@ -632,8 +638,6 @@ cat("===Correlation analysis===\nPlotting might take a while with significant am
 dataReport$correlationAnalysisInterpretation <- capture.output(analiseCorrelation(loadedData, dataReport$summary))
 cat(dataReport$correlationAnalysisInterpretation, sep = "\n")
 
-#dataReport$args$output_file <- 'output_anal2.txt'
-#createReport(dataReport$args$output_file)
 #save report to output file
 if(!is.null(args$output_file))
 {
