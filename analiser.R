@@ -220,31 +220,44 @@ createReport <- function(rData)
   if(length(unique(rData$correctedData[[1]])) < 2)
   {
     sink(file = rData$args$output_file, append = TRUE)
-    cat('[WARNING] Loaded data contains only 1 group. Statistical comparsion is not possible - skipping.\n')
+    cat('[WARNING] Loaded data contains only 1 group. Statistical comparsions are not possible - skipping group analysis and correlation analysis.\n')
     sink()
   }else if(length(unique(rData$correctedData[[1]])) == 2)
   {
     sink(file = rData$args$output_file, append = TRUE)
     cat(rData$analysisInterpretation, sep = "\n") 
     sink()
+    
+    sink(file = rData$args$output_file, append = TRUE)
+    cat(rData$nonNumericAnalysisInterpretation, sep = '\n')
+    cat("\n")
+    sink()
+    
+    #report correlation
+    sink(file = rData$args$output_file, append = TRUE)
+    cat("===CORRELATION ANALYSIS===\n")
+    cat(rData$correlationAnalysisInterpretation, sep = "\n")
+    cat("\n")
+    sink()
   }else
   {
     sink(file = rData$args$output_file, append = TRUE)
     cat(rData$analysisInterpretation, sep = "\n")
     sink()
+    
+    sink(file = rData$args$output_file, append = TRUE)
+    cat(rData$nonNumericAnalysisInterpretation, sep = '\n')
+    cat("\n")
+    sink()
+    
+    #report correlation
+    sink(file = rData$args$output_file, append = TRUE)
+    cat("===CORRELATION ANALYSIS===\n")
+    cat(rData$correlationAnalysisInterpretation, sep = "\n")
+    cat("\n")
+    sink()
   }
-  sink(file = rData$args$output_file, append = TRUE)
-  cat(rData$nonNumericAnalysisInterpretation, sep = '\n')
-  cat("\n")
-  sink()
-  
-  #report correlation
-  sink(file = rData$args$output_file, append = TRUE)
-  cat("===CORRELATION ANALYSIS===\n")
-  cat(rData$correlationAnalysisInterpretation, sep = "\n")
-  cat("\n")
-  sink()
-  
+
   cat("END OF REPORT=====================================================\n")
 }
 
@@ -408,8 +421,6 @@ analiseNonNumeric <- function(data)
 {
   selectedData <- as.data.frame(data) %>% select_if(negate(is.numeric))
   cols <- colnames(selectedData)[-1]
-  print(names(cols))
-  print(typeof(cols))
   result <- list()
   
   cat("For attribute:\n")
@@ -616,27 +627,38 @@ box_group_plot(loadedData)
 #numeric statistical analysis
 if(length(unique(loadedData[[1]])) < 2)
 {
-  warning('Loaded data contains only 1 group. Statistical comparsion is not possible - skipping.\n')
+  cat('Loaded data contains only 1 group. Statistical comparsions are not possible - skipping group analysis and correlation analysis.\n')
 }else if(length(unique(loadedData[[1]])) == 2)
 {
   cat("===Pairwise group analysis===\n")
   dataReport$analysis <- analiseTwoGroups(loadedData, dataReport$summary)
   dataReport$analysisInterpretation <- capture.output(analiseTwoGroups(loadedData, dataReport$summary)) 
+  
+  #non-numeric analysis
+  cat("===Non-numeric group analysis===\n")
+  dataReport$nonNumericAnalysisInterpretation <- capture.output(analiseNonNumeric(loadedData))
+  cat(dataReport$nonNumericAnalysisInterpretation, sep = '\n')
+  
+  #correlation analysis
+  cat("===Correlation analysis===\nPlotting might take a while with significant amount of attributes.\n")
+  dataReport$correlationAnalysisInterpretation <- capture.output(analiseCorrelation(loadedData, dataReport$summary))
+  cat(dataReport$correlationAnalysisInterpretation, sep = "\n")
 }else
 {
   cat("===Multiple group analysis===\n")
   dataReport$analysis <- analiseMultipleGroups(loadedData, dataReport$summary)
   dataReport$analysisInterpretation <- capture.output(analiseMultipleGroups(loadedData, dataReport$summary))
+  
+  #non-numeric analysis
+  cat("===Non-numeric group analysis===\n")
+  dataReport$nonNumericAnalysisInterpretation <- capture.output(analiseNonNumeric(loadedData))
+  cat(dataReport$nonNumericAnalysisInterpretation, sep = '\n')
+  
+  #correlation analysis
+  cat("===Correlation analysis===\nPlotting might take a while with significant amount of attributes.\n")
+  dataReport$correlationAnalysisInterpretation <- capture.output(analiseCorrelation(loadedData, dataReport$summary))
+  cat(dataReport$correlationAnalysisInterpretation, sep = "\n")
 }
-#non-numeric analysis
-cat("===Non-numeric group analysis===\n")
-dataReport$nonNumericAnalysisInterpretation <- capture.output(analiseNonNumeric(loadedData))
-cat(dataReport$nonNumericAnalysisInterpretation, sep = '\n')
-
-#correlation analysis
-cat("===Correlation analysis===\nPlotting might take a while with significant amount of attributes.\n")
-dataReport$correlationAnalysisInterpretation <- capture.output(analiseCorrelation(loadedData, dataReport$summary))
-cat(dataReport$correlationAnalysisInterpretation, sep = "\n")
 
 #save report to output file
 if(!is.null(args$output_file))
